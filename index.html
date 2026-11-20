@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מכ״ם הגשם שלנו</title>
+<meta name="description" content="מכ״ם גשם חי ללהבים, באר שבע, נבטים והרצליה, עם הסברים לילדים.">
+<meta name="theme-color" content="#1f7fd1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1a25" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="מכ״ם גשם">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Secular+One&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: phone app. Slim top bar, one screen per tab (עכשיו / מפה / מילון), tab bar fixed at the bottom */
+:root {
+  --bg: #eaf2f7;
+  --panel: #ffffff;
+  --ink: #12304a;
+  --ink-soft: #4d6a80;
+  --line: #cfdfe9;
+  --rain: #1f7fd1;
+  --sun: #f2a516;
+  --good: #1f9a5a;
+  --bad: #d23c2f;
+  --chip: #dcebf5;
+  --fc: #7a4fd0;
+  --nav-h: 64px;
+  --font-display: "Secular One", "Rubik", "Arial Hebrew", Arial, sans-serif;
+  --font-body: "Rubik", "Arial Hebrew", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1a25;
+    --panel: #142635;
+    --ink: #e4eef6;
+    --ink-soft: #9db4c6;
+    --line: #24394b;
+    --rain: #5fb0f0;
+    --sun: #f5b941;
+    --good: #46c584;
+    --bad: #ff6b5e;
+    --chip: #1d3446;
+    --fc: #a98bf0;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Top bar */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.topbar h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.1;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.topbar h1 .drop { color: var(--rain); }
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.live .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); animation: pulse 1.6s infinite; flex: none; }
+.live.off .dot { background: var(--bad); animation: none; }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+.icon-btn {
+  font: inherit;
+  border: 0;
+  background: var(--chip);
+  color: var(--ink);
+  border-radius: 12px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+}
+.icon-btn.install { background: var(--rain); color: #fff; }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.spin svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+
+.page { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 24px; }
+.view { display: grid; gap: 16px; }
+h2 { font-family: var(--font-display); font-weight: 400; font-size: 24px; margin: 0; }
+.lead { margin: -8px 0 0; color: var(--ink-soft); }
+
+/* Answer cards */
+.towns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+@media (min-width: 700px) { .towns { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.town {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.town[data-level="rain"], .town[data-level="heavy"], .town[data-level="storm"] { border-color: var(--rain); }
+.town-head { display: flex; align-items: center; gap: 12px; }
+.big-icon { font-size: 50px; line-height: 1; }
+.town-name { font-family: var(--font-display); font-size: 26px; line-height: 1.1; }
+.question { font-size: 14px; color: var(--ink-soft); }
+.answer { font-size: 20px; font-weight: 700; line-height: 1.35; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fact { background: var(--chip); border-radius: 12px; padding: 3px 10px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.fact b { font-weight: 700; }
+.hours-title { font-size: 14px; color: var(--ink-soft); margin: 0; }
+.hours { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; align-items: end; height: 88px; }
+.hour { display: grid; grid-template-rows: 1fr auto auto; height: 100%; text-align: center; min-width: 0; }
+.bar-box { display: flex; align-items: flex-end; justify-content: center; }
+.bar { width: 100%; max-width: 20px; border-radius: 6px 6px 2px 2px; background: var(--rain); min-height: 3px; }
+.hour .pct { font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.hour .hh { font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.notice { border-radius: 14px; padding: 12px 14px; background: var(--chip); font-size: 15px; }
+.notice.err { border: 2px solid var(--bad); }
+.notice a { color: inherit; }
+.tip { display: flex; gap: 10px; align-items: flex-start; }
+.tip p { margin: 0; flex: 1; }
+
+/* Map screen */
+.map-card { background: var(--panel); border: 2px solid var(--line); border-radius: 20px; padding: 12px; display: grid; gap: 12px; min-width: 0; }
+.map-wrap { position: relative; }
+#map {
+  height: clamp(300px, calc(100dvh - 330px), 640px);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--chip);
+}
+.fc-badge {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 900;
+  background: #7a4fd0; color: #fff;
+  font-weight: 700; font-size: 14px;
+  padding: 4px 12px; border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  white-space: nowrap;
+}
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+button.ctl {
+  font: inherit; font-weight: 700;
+  border: 0; border-radius: 14px;
+  padding: 10px 16px;
+  background: var(--rain); color: #fff;
+  cursor: pointer;
+  min-width: 104px;
+}
+button.ctl.ghost { background: var(--chip); color: var(--ink); min-width: 0; }
+button:focus-visible, input[type=range]:focus-visible, summary:focus-visible, .tabbar a:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+#slider { flex: 1 1 160px; min-width: 0; accent-color: var(--rain); height: 32px; }
+.frame-time { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.frame-ago { color: var(--ink-soft); font-size: 14px; }
+.legend { display: grid; gap: 6px; }
+.legend-strip, .legend-labels { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.legend-strip span { height: 16px; border-radius: 4px; }
+.legend-labels { font-size: 12px; text-align: center; }
+.legend small { color: var(--ink-soft); }
+.icon-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; }
+.icon-legend b { font-weight: 700; }
+.howto { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@media (min-width: 700px) { .howto { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.step { background: var(--panel); border-radius: 16px; padding: 12px 14px; border: 2px dashed var(--line); }
+.step b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 19px; color: var(--rain); }
+
+/* Dictionary screen */
+.dict { background: var(--panel); border: 2px solid var(--line); border-radius: 20px; padding: 6px 16px; }
+.dict details + details { border-top: 1px solid var(--line); }
+.dict summary {
+  cursor: pointer; list-style: none;
+  padding: 12px 2px;
+  font-weight: 700; font-size: 18px;
+  display: flex; justify-content: space-between; gap: 10px;
+}
+.dict summary::-webkit-details-marker { display: none; }
+.dict summary::after { content: "+"; color: var(--rain); font-size: 22px; line-height: 1; }
+.dict details[open] summary::after { content: "–"; }
+.dict .def { padding: 0 2px 12px; font-size: 16px; }
+.dict .def p { margin: 0 0 6px; }
+.dict .eg { color: var(--ink-soft); font-size: 15px; }
+.credits { color: var(--ink-soft); font-size: 13px; }
+.credits a { color: inherit; }
+
+/* Bottom tab bar */
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 1000;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.tabbar a {
+  height: var(--nav-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 13px; font-weight: 700;
+}
+.tabbar a svg { width: 26px; height: 26px; }
+.tabbar a[aria-current="page"] { color: var(--rain); }
+.tabbar a[aria-current="page"] svg { stroke-width: 2.4; }
+
+/* Map pins: each place is a 0x0 box on its exact spot; dot, name and weather bubble hang off it */
+.leaflet-container { font-family: var(--font-body); }
+.pin { position: relative; width: 0; height: 0; }
+.pin i {
+  position: absolute; left: -8px; top: -8px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #f2a516;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #12304a;
+  box-sizing: border-box;
+}
+.pin .lbl {
+  position: absolute; top: -11px;
+  direction: rtl; white-space: nowrap;
+  background: #fff; color: #12304a;
+  font-weight: 700; font-size: 14px; line-height: 20px;
+  padding: 1px 7px; border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.pin.lbl-right .lbl { left: 12px; }
+.pin.lbl-left .lbl { right: 12px; }
+.pin .wx {
+  position: absolute; left: calc(var(--dx, 0px) - 23px);
+  width: 46px; padding: 3px 0 2px;
+  text-align: center; line-height: 1.05;
+  background: #fff; color: #12304a;
+  border: 2px solid #fff; border-radius: 12px;
+  box-shadow: 0 1px 5px rgba(0,0,0,.4);
+}
+.pin.wx-up .wx { bottom: 13px; }
+.pin.wx-down .wx { top: 13px; }
+.pin .wx b { display: block; font-size: 24px; font-weight: 400; }
+.pin .wx small { display: block; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; direction: ltr; }
+.pin .wx.fc { border: 2px dashed #7a4fd0; background: #f4efff; }
+.sea-label { color: #1f5f99; font-weight: 700; font-size: 13px; white-space: nowrap; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+@media (prefers-reduced-motion: reduce) { .live .dot, .icon-btn.spin svg { animation: none; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>מכ״ם ה<span class="drop">גשם</span> שלנו</h1>
+  <span class="live" id="live"><span class="dot"></span><span id="liveText">מתחבר…</span></span>
+  <button class="icon-btn install" id="installBtn" type="button" hidden>התקנה</button>
+  <button class="icon-btn" id="refreshBtn" type="button" aria-label="רענון">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+  </button>
+</header>
+
+<main class="page">
+  <!-- Screen 1: what is happening now -->
+  <section class="view" id="view-now" aria-labelledby="nowTitle">
+    <h2 id="nowTitle">מה קורה עכשיו?</h2>
+    <p class="lead">יורד גשם? הגשם מתקרב? התשובה לכל מקום.</p>
+    <div class="notice tip" id="installTip" hidden>
+      <p><b>טיפ:</b> אפשר לשים את המכ״ם במסך הבית כמו אפליקציה. ב-Chrome לוחצים על שלוש הנקודות למעלה, ואז "התקנת אפליקציה" או "הוספה למסך הבית".</p>
+      <button class="icon-btn" id="tipClose" type="button" aria-label="סגירת הטיפ">✕</button>
+    </div>
+    <div class="towns" id="towns">
+      <div class="town"><div class="town-head"><div class="big-icon">⏳</div><div><div class="town-name">להבים</div><div class="question">בודקים…</div></div></div></div>
+      <div class="town"><div class="town-head"><div class="big-icon">⏳</div><div><div class="town-name">באר שבע</div><div class="question">בודקים…</div></div></div></div>
+      <div class="town"><div class="town-head"><div class="big-icon">⏳</div><div><div class="town-name">נבטים</div><div class="question">בודקים…</div></div></div></div>
+      <div class="town"><div class="town-head"><div class="big-icon">⏳</div><div><div class="town-name">הרצליה</div><div class="question">בודקים…</div></div></div></div>
+    </div>
+    <div class="notice">
+      <b>חשוב לדעת:</b> המכ״ם רואה מה <u>היה</u> ומה <u>קורה עכשיו</u>. הפסים של "השעות הבאות" והסמלילים בחלק הסגול של סרטון המכ״ם הם <u>תחזית</u>, כלומר ניחוש חכם של מחשב, ולפעמים הוא טועה.
+      לאזהרות רשמיות (סופה, שיטפון) בודקים תמיד גם באתר <a href="https://ims.gov.il/he" target="_blank" rel="noopener">השירות המטאורולוגי</a>.
+    </div>
+  </section>
+
+  <!-- Screen 2: radar map -->
+  <section class="view" id="view-map" aria-labelledby="mapTitle" hidden>
+    <h2 id="mapTitle">מפת המכ״ם</h2>
+    <p class="lead">הכתמים הצבעוניים = גשם. ליד כל מקום יש סמליל של מזג האוויר שם.</p>
+    <div class="map-card">
+      <div class="map-wrap">
+        <div id="map" dir="ltr" role="img" aria-label="מפה של מרכז ודרום ישראל עם גשם מהמכ״ם וסמלילי מזג אוויר"></div>
+        <div class="fc-badge" id="fcBadge" hidden>🔮 תחזית: אין מכ״ם לעתיד, רק סמלילים</div>
+      </div>
+      <div class="controls">
+        <button class="ctl" id="playBtn" type="button">▶ הפעל</button>
+        <input id="slider" type="range" min="0" max="0" value="0" aria-label="בחירת זמן במכ״ם">
+        <div>
+          <div class="frame-time" id="frameTime">--:--</div>
+          <div class="frame-ago" id="frameAgo">טוען…</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="ctl ghost" id="homeBtn" type="button">כל המקומות</button>
+        <button class="ctl ghost" id="baseBtn" type="button">מפה אחרת</button>
+      </div>
+      <div class="legend" aria-label="מקרא צבעים">
+        <div class="legend-strip">
+          <span style="background:#a6dcf2"></span>
+          <span style="background:#5bb8ea"></span>
+          <span style="background:#1f84d6"></span>
+          <span style="background:#0b4f9e"></span>
+          <span style="background:#ffd60a"></span>
+          <span style="background:#ff7a1a"></span>
+          <span style="background:#c8209e"></span>
+        </div>
+        <div class="legend-labels">
+          <span>טפטוף</span><span>חלש</span><span>גשם</span><span>חזק</span><span>חזק מאוד</span><span>סופה</span><span>ברד</span>
+        </div>
+        <small>הצבעים בערך. ככל שהצבע כהה יותר או "חם" יותר (צהוב, כתום, סגול), הגשם חזק יותר.</small>
+      </div>
+      <div class="icon-legend" aria-label="מקרא סמלילים">
+        <b>הסמלילים:</b>
+        <span>☀️ שמש</span><span>🌙 לילה בהיר</span><span>⛅ קצת עננים</span><span>☁️ מעונן</span><span>🌫️ ערפל</span><span>🌦️ טפטוף</span><span>🌧️ גשם</span><span>⛈️ סופת רעמים</span>
+        <span>מסגרת סגולה מקווקוות = תחזית</span>
+      </div>
+      <div class="notice" id="radarNote" hidden></div>
+    </div>
+    <h2>איך קוראים את המפה? 3 צעדים</h2>
+    <div class="howto">
+      <div class="step"><b>1. מוצאים את המקומות</b>הנקודות הצהובות הן להבים, באר שבע, נבטים והרצליה. ליד כל נקודה יש סמליל של מזג האוויר שם.</div>
+      <div class="step"><b>2. לוחצים ▶</b>הסרטון מראה את השעתיים האחרונות, ואז ממשיך כמה שעות קדימה לפי התחזית. הסמלילים משתנים יחד איתו.</div>
+      <div class="step"><b>3. מתקרב אלינו?</b>אם הכתמים זזים לכיוון הנקודות, הגשם בדרך. בחורף הוא מגיע בדרך כלל מהים, משמאל.</div>
+    </div>
+  </section>
+
+  <!-- Screen 3: dictionary for kids -->
+  <section class="view" id="view-dict" aria-labelledby="dictTitle" hidden>
+    <h2 id="dictTitle">מילון מילים</h2>
+    <p class="lead">לא הבנתם מילה? לחצו עליה ותקבלו הסבר.</p>
+    <div class="dict" id="dict"></div>
+    <p class="credits">
+      נתוני מכ״ם: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">Rain Viewer</a> ·
+      תחזית: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> ·
+      מפה: © Esri, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>.
+      האפליקציה מתעדכנת לבד כל 5 דקות, וגם בכל פעם שפותחים אותה.
+    </p>
+  </section>
+</main>
+
+<nav class="tabbar" aria-label="מסכים">
+  <a href="#now" data-view="now" aria-current="page">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.1 11 3.5 3.5 0 0 0 7 18z"/><path d="M9 21l1-2M13 21l1-2"/></svg>
+    עכשיו
+  </a>
+  <a href="#map" data-view="map">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+    מכ״ם
+  </a>
+  <a href="#dict" data-view="dict">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M8 7h7M8 11h5"/></svg>
+    מילון
+  </a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const PLACES = [
+    { id: "lehavim",   name: "להבים",   lat: 31.3727, lon: 34.8161 },
+    { id: "beersheva", name: "באר שבע", lat: 31.2520, lon: 34.7915 },
+    { id: "nevatim",   name: "נבטים",   lat: 31.2167, lon: 34.8833 },
+    { id: "herzliya",  name: "הרצליה",  lat: 32.1624, lon: 34.8447 }
+  ];
+  // Where each name and weather bubble sits on the map, so close places (באר שבע, נבטים) don't overlap
+  const PIN_LAYOUT = {
+    lehavim:   { lbl: "left",  wx: "up",   dx: 0 },
+    beersheva: { lbl: "left",  wx: "down", dx: -24 },
+    nevatim:   { lbl: "right", wx: "down", dx: 24 },
+    herzliya:  { lbl: "right", wx: "up",   dx: 0 }
+  };
+  PLACES.forEach((p) => Object.assign(p, PIN_LAYOUT[p.id]));
+
+  const TZ = "Asia/Jerusalem";
+  const REFRESH_MS = 5 * 60 * 1000;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hhmm = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: TZ, hour12: false });
+  const hourFmt = new Intl.DateTimeFormat("he-IL", { hour: "2-digit", timeZone: TZ, hour12: false });
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  };
+
+  /* ---------- Dictionary (for kids, about age 10) ---------- */
+  const DICT = [
+    ["מכ״ם (רדאר)", "מכשיר ששולח לשמיים גלים שאי אפשר לראות. כשהגלים פוגעים בטיפות גשם, חלק מהם חוזר אחורה, כמו הד כשצועקים מול הר. לפי ההד המכ״ם יודע איפה יש גשם וכמה.", "מכ״ם = ראשי תיבות של \"מגלה כיוון ומקום\"."],
+    ["גשם", "טיפות מים שנופלות מהעננים. ענן בנוי ממיליוני טיפות קטנטנות. כשהן מתחברות ונהיות כבדות, הן נופלות.", ""],
+    ["משקעים", "שם כללי לכל מה שנופל מהעננים: גשם, טפטוף, ברד ושלג.", ""],
+    ["טפטוף", "גשם עם טיפות קטנות מאוד. מרטיב קצת, אבל לא צריך לברוח הביתה.", ""],
+    ["ממטרים", "גשם שבא והולך: יורד חזק כמה דקות, נעצר, ואחר כך חוזר.", "בחורף בדרום יש הרבה ממטרים."],
+    ["ברד", "כדורי קרח קטנים שנופלים מענן גבוה וקר מאוד. יכולים להיות בגודל של אפונה ואפילו יותר.", ""],
+    ["סופת רעמים", "ענן ענק עם ברקים ורעמים. הברק הוא חשמל בשמיים, והרעם הוא הרעש שהברק עושה.", "טריק: ספרו כמה שניות עוברות מהברק עד הרעם וחלקו ב-3. זה בערך כמה קילומטרים הסופה רחוקה."],
+    ["מילימטר גשם (מ״מ)", "כמה גשם ירד. אם נשים בחוץ כוס עם דפנות ישרות, זה כמה גבוה המים יגיעו בתוכה.", "1 מ״מ זו שכבה דקה כמו מטבע. 10 מ״מ זה כבר גשם רציני."],
+    ["סיכוי לגשם (%)", "כמה החזאים בטוחים שירד גשם. מספר בין 0 ל-100.", "10% = כמעט בטוח שלא. 50% = כמו להטיל מטבע. 90% = כמעט בטוח שכן."],
+    ["תחזית", "ניחוש חכם של מחשבים גדולים על מזג האוויר בשעות ובימים הבאים. המכ״ם מראה מה קורה עכשיו, והתחזית מנסה לנחש מה יקרה אחר כך.", "תחזית יכולה לטעות, במיוחד כמה ימים קדימה."],
+    ["חזאי", "מי שעבודתו לחזות את מזג האוויר. משתמש במכ״ם, בלוויינים ובמחשבים.", ""],
+    ["עננות", "כמה מהשמיים מכוסים בעננים.", "0% = שמיים כחולים לגמרי. 100% = הכל אפור."],
+    ["טמפרטורה (°)", "כמה חם או קר בחוץ. מודדים במעלות.", "10° קריר, צריך מעיל. 25° נעים. 35° חם מאוד."],
+    ["רוח (קמ״ש)", "כמה מהר האוויר זז, בקילומטרים לשעה (קמ״ש).", "10 קמ״ש = משב קל. 40 קמ״ש = רוח חזקה שמעיפה כובעים."],
+    ["סמלילים על המפה", "הציורים הקטנים ליד כל מקום: שמש, עננים, גשם או סופה. הם מראים את מזג האוויר שם, ולידם כתובה הטמפרטורה.", "כשהסרטון ממשיך לעתיד, הסמלילים באים מהתחזית ומקבלים מסגרת סגולה מקווקוות. מכ״ם לא יכול לצלם את העתיד, אז שם רואים רק סמלילים."],
+    ["סרטון המכ״ם (אנימציה)", "הרבה תמונות של המכ״ם, אחת כל 10 דקות, שמוצגות מהר אחת אחרי השנייה. ככה רואים לאן הגשם זז.", "לוחצים ▶ כדי להפעיל."],
+    ["מערכת גשם / חזית", "קבוצה גדולה של עננים שזזה יחד ומביאה גשם לכמה שעות או ימים.", "בחורף בישראל היא מגיעה בדרך כלל מהים התיכון, ממערב."],
+    ["מערב ומזרח", "מערב הוא הצד של הים, שמאל במפה. השמש שוקעת במערב. מזרח הוא הצד של המדבר וירדן, ימין במפה. השמש זורחת במזרח.", ""],
+    ["זמן אמת (לייב)", "הנתונים מתעדכנים לבד כל כמה דקות, בלי ללחוץ על כלום.", "הנקודה הירוקה למעלה אומרת שהכל מחובר."],
+    ["זום (הגדלה)", "להתקרב או להתרחק במפה: מקרבים או מרחיקים שתי אצבעות על המסך.", ""],
+    ["\"צל\" של מכ״ם", "מקומות שהמכ״ם לא רואה טוב, למשל מאחורי הרים או רחוק מאוד ממנו. לפעמים יורד שם גשם שלא מופיע במפה.", ""],
+    ["שיטפון", "כשיורד המון גשם בבת אחת, המים זורמים מהר בנחלים ובוואדיות. בנגב זה יכול לקרות גם כשאצלנו לא יורד גשם בכלל.", "בזמן שיטפון לא נכנסים לנחלים ולוואדיות!"],
+    ["אפליקציה", "תוכנה בטלפון. את המכ״ם הזה אפשר לשים במסך הבית ולפתוח בלחיצה אחת, כמו כל אפליקציה.", "כדי שהנתונים יתעדכנו צריך אינטרנט."]
+  ];
+  (function buildDict() {
+    const box = $("dict");
+    DICT.forEach(([term, text, eg]) => {
+      const d = document.createElement("details");
+      const s = document.createElement("summary");
+      s.textContent = term;
+      const def = document.createElement("div");
+      def.className = "def";
+      const p = document.createElement("p");
+      p.textContent = text;
+      def.appendChild(p);
+      if (eg) {
+        const e = document.createElement("p");
+        e.className = "eg";
+        e.textContent = eg;
+        def.appendChild(e);
+      }
+      d.append(s, def);
+      box.appendChild(d);
+    });
+  })();
+
+  /* ---------- Live status ---------- */
+  const status = { weather: null, radar: null };
+  function setLive() {
+    const live = $("live");
+    if (!navigator.onLine) {
+      live.classList.add("off");
+      $("liveText").textContent = "אין אינטרנט";
+      return;
+    }
+    const ok = status.weather !== false && status.radar !== false;
+    live.classList.toggle("off", !ok);
+    $("liveText").textContent = ok ? "חי · " + hhmm.format(new Date()) : "בעיה בחיבור";
+  }
+  window.addEventListener("online", () => refreshAll());
+  window.addEventListener("offline", setLive);
+
+  /* ---------- Weather (Open-Meteo forecast) ---------- */
+  let wx = null; // one {current, hourly} per place, times in unix seconds
+
+  function codeInfo(code) {
+    if (code >= 95) return { icon: "⛈️", text: "סופת רעמים" };
+    if (code >= 80) return { icon: "🌧️", text: "ממטרים" };
+    if (code >= 71 && code <= 77) return { icon: "❄️", text: "שלג" };
+    if (code >= 61) return { icon: "🌧️", text: "גשם" };
+    if (code >= 51) return { icon: "🌦️", text: "טפטוף" };
+    if (code >= 45) return { icon: "🌫️", text: "ערפל" };
+    if (code === 3) return { icon: "☁️", text: "מעונן" };
+    if (code >= 1) return { icon: "⛅", text: "מעונן חלקית" };
+    return { icon: "☀️", text: "בהיר" };
+  }
+
+  // The small map icon for one place at one moment
+  function skyIcon(code, mm, isDay) {
+    if (code >= 95) return "⛈️";
+    if (code >= 71 && code <= 77) return "❄️";
+    if (mm >= 0.5 || (code >= 61 && code <= 67) || code >= 80) return "🌧️";
+    if (mm > 0 || (code >= 51 && code <= 57)) return "🌦️";
+    if (code === 45 || code === 48) return "🌫️";
+    if (code === 3) return "☁️";
+    if (!isDay) return code === 2 ? "☁️" : "🌙";
+    if (code >= 1) return "⛅";
+    return "☀️";
+  }
+
+  // Weather at place pi at time t (unix seconds): "now" data near the present, hourly data otherwise
+  function wxAt(pi, t) {
+    const d = wx && wx[pi];
+    if (!d) return null;
+    const c = d.current;
+    if (Math.abs(t - c.time) <= 15 * 60) {
+      return { icon: skyIcon(c.weather_code, c.precipitation || 0, c.is_day === 1), temp: c.temperature_2m };
+    }
+    const h = d.hourly;
+    let k = h.time.findIndex((ht) => t >= ht && t < ht + 3600);
+    if (k < 0) k = t < h.time[0] ? 0 : h.time.length - 1;
+    return { icon: skyIcon(h.weather_code[k], h.precipitation[k] || 0, h.is_day[k] === 1), temp: h.temperature_2m[k] };
+  }
+
+  function verdict(cur, hours) {
+    const mm = cur.precipitation || 0;
+    const code = cur.weather_code;
+    const next = hours.slice(1, 7);
+    const maxProb = Math.max(0, ...next.map((h) => h.prob || 0));
+    const firstWet = next.findIndex((h) => (h.prob || 0) >= 50);
+
+    if (code >= 95) return { level: "storm", icon: "⛈️", text: "סופת רעמים! נכנסים הביתה, לא עומדים ליד עצים ולא נכנסים לנחלים." };
+    if (mm >= 2) return { level: "heavy", icon: "🌧️", text: "יורד גשם חזק! עדיף להישאר בבית." };
+    if (mm >= 0.4) return { level: "rain", icon: "☔", text: "יורד גשם. קחו מטרייה או מעיל עם כובע." };
+    if (mm > 0 || (code >= 51 && code < 70) || code >= 80) return { level: "light", icon: "🌦️", text: "יורד גשם חלש או טפטוף. מעיל קל יספיק." };
+    if (firstWet >= 0) {
+      const inH = firstWet + 1;
+      return { level: "soon", icon: "🌥️", text: "עכשיו יבש, אבל אולי ירד גשם בעוד " + (inH === 1 ? "שעה" : inH === 2 ? "שעתיים" : inH + " שעות") + ". כדאי לקחת מעיל." };
+    }
+    if (maxProb >= 20) return { level: "maybe", icon: "⛅", text: "לא יורד גשם. יש סיכוי קטן לגשם בהמשך." };
+    const night = cur.is_day === 0;
+    return { level: "dry", icon: night ? "🌙" : codeInfo(code).icon, text: night ? "לא יורד גשם. לילה יבש." : "לא יורד גשם, וגם לא צפוי בקרוב. אפשר לצאת לשחק!" };
+  }
+
+  function renderTown(place, data) {
+    const cur = data.current;
+    const h = data.hourly;
+    const hourStart = Math.floor(cur.time / 3600) * 3600;
+    const hours = h.time.map((t, i) => ({
+      t: t,
+      prob: h.precipitation_probability ? h.precipitation_probability[i] : null,
+      mm: h.precipitation ? h.precipitation[i] : 0
+    })).filter((x) => x.t >= hourStart).slice(0, 12);
+    const v = verdict(cur, hours);
+    const sky = codeInfo(cur.weather_code);
+
+    const card = document.createElement("article");
+    card.className = "town";
+    card.dataset.level = v.level;
+
+    const head = document.createElement("div");
+    head.className = "town-head";
+    const ic = document.createElement("div");
+    ic.className = "big-icon";
+    ic.setAttribute("aria-hidden", "true");
+    ic.textContent = v.icon;
+    const nm = document.createElement("div");
+    const n1 = document.createElement("div");
+    n1.className = "town-name";
+    n1.textContent = place.name;
+    const n2 = document.createElement("div");
+    n2.className = "question";
+    n2.textContent = "יורד גשם ב" + place.name + " עכשיו?";
+    nm.append(n1, n2);
+    head.append(ic, nm);
+
+    const ans = document.createElement("div");
+    ans.className = "answer";
+    ans.textContent = v.text;
+
+    const facts = document.createElement("div");
+    facts.className = "facts";
+    const addFact = (label, value) => {
+      const f = document.createElement("span");
+      f.className = "fact";
+      const b = document.createElement("b");
+      b.textContent = value;
+      f.append(label + ": ", b);
+      facts.appendChild(f);
+    };
+    addFact("בשמיים", sky.text);
+    addFact("טמפרטורה", Math.round(cur.temperature_2m) + "°");
+    addFact("עננות", Math.round(cur.cloud_cover) + "%");
+    addFact("רוח", Math.round(cur.wind_speed_10m) + " קמ״ש");
+    addFact("גשם עכשיו", (cur.precipitation || 0).toFixed(1) + " מ״מ");
+
+    const ht = document.createElement("p");
+    ht.className = "hours-title";
+    ht.textContent = "סיכוי לגשם ב-12 השעות הבאות (תחזית):";
+    const bars = document.createElement("div");
+    bars.className = "hours";
+    hours.forEach((x, i) => {
+      const p = x.prob == null ? 0 : x.prob;
+      const col = document.createElement("div");
+      col.className = "hour";
+      col.title = hhmm.format(new Date(x.t * 1000)) + " · סיכוי " + p + "% · " + (x.mm || 0).toFixed(1) + " מ״מ";
+      const box = document.createElement("div");
+      box.className = "bar-box";
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.style.height = Math.max(3, p * 0.55) + "px";
+      bar.style.opacity = String(0.35 + Math.min(1, (x.mm || 0) / 3) * 0.65);
+      box.appendChild(bar);
+      const pct = document.createElement("span");
+      pct.className = "pct";
+      pct.textContent = p + "%";
+      const hh = document.createElement("span");
+      hh.className = "hh";
+      hh.textContent = i === 0 ? "עכשיו" : (i % 3 === 0 ? hourFmt.format(new Date(x.t * 1000)) : "");
+      col.append(box, pct, hh);
+      bars.appendChild(col);
+    });
+
+    card.append(head, ans, facts, ht, bars);
+    return card;
+  }
+
+  async function loadWeather() {
+    const url = "https://api.open-meteo.com/v1/forecast" +
+      "?latitude=" + PLACES.map((p) => p.lat).join(",") +
+      "&longitude=" + PLACES.map((p) => p.lon).join(",") +
+      "&current=temperature_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,is_day" +
+      "&hourly=precipitation_probability,precipitation,weather_code,temperature_2m,is_day" +
+      "&past_hours=3&forecast_hours=12&timeformat=unixtime&timezone=" + encodeURIComponent(TZ);
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      let j = await r.json();
+      if (!Array.isArray(j)) j = [j];
+      wx = j;
+      $("towns").replaceChildren(...PLACES.map((p, i) => renderTown(p, j[i])));
+      status.weather = true;
+    } catch (e) {
+      status.weather = false;
+      const box = $("towns");
+      if (!box.querySelector("[data-level]")) {
+        const n = document.createElement("div");
+        n.className = "notice err";
+        n.textContent = "לא הצלחנו להביא את מזג האוויר עכשיו. בדקו שיש אינטרנט. ננסה שוב לבד בעוד כמה דקות.";
+        box.replaceChildren(n);
+      }
+    }
+    setLive();
+    rebuildTimeline();
+  }
+
+  /* ---------- Map (built the first time the מכ״ם tab opens, so it gets its real size) ---------- */
+  const darkMap = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  // Free background maps that need no key. If one fails to load, the next one is tried;
+  // the "מפה אחרת" button also switches by hand.
+  const BASEMAPS = [
+    darkMap
+      ? { urls: [ESRI + "Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", ESRI + "Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"], attribution: "מפה: © Esri" }
+      : { urls: [ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}"], attribution: "מפה: © Esri" },
+    { urls: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], attribution: "מפה: © OpenStreetMap" },
+    { urls: [ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}"], attribution: "מפה: © Esri" }
+  ];
+  let map = null;
+  let baseIdx = -1;
+  let baseLayers = [];
+  let markers = [];
+
+  function homeView() {
+    if (map) map.fitBounds(L.latLngBounds(PLACES.map((p) => [p.lat, p.lon])).pad(0.3));
+  }
+
+  function useBasemap(i) {
+    baseLayers.forEach((l) => map.removeLayer(l));
+    baseIdx = i % BASEMAPS.length;
+    const b = BASEMAPS[baseIdx];
+    let ok = 0, bad = 0;
+    baseLayers = b.urls.map((u, k) => {
+      const l = L.tileLayer(u, { maxZoom: 12, zIndex: 1 + k, attribution: k === 0 ? b.attribution : "" });
+      if (k === 0) {
+        l.on("tileload", () => { ok++; });
+        l.on("tileerror", () => {
+          bad++;
+          if (ok === 0 && bad === 4 && baseIdx === i % BASEMAPS.length && i + 1 < BASEMAPS.length) useBasemap(i + 1);
+        });
+      }
+      return l.addTo(map);
+    });
+  }
+
+  function ensureMap() {
+    if (map) { map.invalidateSize(); return; }
+    if (typeof L === "undefined") {
+      const note = $("radarNote");
+      note.hidden = false;
+      note.className = "notice err";
+      note.textContent = "המפה לא נטענה. בדקו שיש אינטרנט ולחצו על כפתור הרענון למעלה.";
+      return;
+    }
+    map = L.map("map", { zoomControl: true, attributionControl: true });
+    map.attributionControl.setPrefix(false);
+    homeView();
+    useBasemap(0);
+    // One marker per place: yellow dot, name, and a weather bubble that follows the timeline
+    markers = PLACES.map((p) => L.marker([p.lat, p.lon], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="pin lbl-' + p.lbl + " wx-" + p.wx + '" style="--dx:' + p.dx + 'px">' +
+          '<div class="wx" hidden><b></b><small></small></div><i></i><span class="lbl">' + p.name + "</span></div>",
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      }),
+      keyboard: false,
+      zIndexOffset: 1000
+    }).addTo(map));
+    L.marker([31.75, 34.42], {
+      icon: L.divIcon({ className: "", html: '<div class="sea-label">הים התיכון · מערב ←</div>', iconSize: [150, 20], iconAnchor: [75, 10] }),
+      interactive: false
+    }).addTo(map);
+    buildRadarLayers();
+    show(idx);
+  }
+
+  function updateIcons(t, isForecast) {
+    markers.forEach((m, pi) => {
+      const el = m.getElement();
+      const box = el && el.querySelector(".wx");
+      if (!box) return;
+      const w = wxAt(pi, t);
+      box.hidden = !w;
+      if (!w) return;
+      box.classList.toggle("fc", isForecast);
+      box.querySelector("b").textContent = w.icon;
+      box.querySelector("small").textContent = Math.round(w.temp) + "°";
+    });
+  }
+
+  /* ---------- Timeline: radar pictures from the past, then forecast hours ---------- */
+  let frames = [];     // RainViewer frames {time, path}
+  let host = "";
+  let layers = [];     // one radar tile layer per frame (only once the map exists)
+  let timeline = [];   // {kind: "radar" | "now" | "fc", time, li}
+  let nowIdx = 0;
+  let idx = 0;
+  let timer = null;
+  let playing = false;
+
+  function tileUrl(f) { return host + f.path + "/256/{z}/{x}/{y}/2/1_1.png"; }
+
+  function buildRadarLayers() {
+    if (!map) return;
+    layers.forEach((l) => map.removeLayer(l));
+    layers = frames.map((f, k) => L.tileLayer(tileUrl(f), {
+      opacity: 0,
+      maxNativeZoom: 7,
+      maxZoom: 12,
+      zIndex: 10 + k,
+      attribution: 'מכ״ם: <a href="https://www.rainviewer.com" target="_blank" rel="noopener">Rain Viewer</a>'
+    }).addTo(map));
+  }
+
+  function agoText(sec) {
+    const min = Math.max(0, Math.round((Date.now() / 1000 - sec) / 60));
+    if (min < 2) return "עכשיו";
+    if (min < 60) return "לפני " + min + " דקות";
+    const h = Math.floor(min / 60), m = min % 60;
+    return "לפני " + (h === 1 ? "שעה" : "שעתיים") + (m ? " ו-" + m + " דקות" : "");
+  }
+  function inText(sec) {
+    const min = Math.max(1, Math.round((sec - Date.now() / 1000) / 60));
+    if (min < 60) return "בעוד " + min + " דקות";
+    const h = Math.round(min / 60);
+    return "בעוד " + (h === 1 ? "שעה" : h === 2 ? "שעתיים" : h + " שעות");
+  }
+
+  function rebuildTimeline() {
+    const tl = frames.map((f, li) => ({ kind: "radar", time: f.time, li }));
+    if (!tl.length) tl.push({ kind: "now", time: Math.floor(Date.now() / 1000) });
+    nowIdx = tl.length - 1;
+    if (wx && wx[0]) {
+      const lastT = tl[nowIdx].time;
+      wx[0].hourly.time.filter((t) => t > lastT + 20 * 60).slice(0, 6)
+        .forEach((t) => tl.push({ kind: "fc", time: t }));
+    }
+    timeline = tl;
+    $("slider").max = String(timeline.length - 1);
+    show(playing ? Math.min(idx, timeline.length - 1) : nowIdx);
+  }
+
+  function show(i) {
+    if (!timeline.length) return;
+    idx = Math.max(0, Math.min(i, timeline.length - 1));
+    const fr = timeline[idx];
+    const isFc = fr.kind === "fc";
+    layers.forEach((l, k) => l.setOpacity(fr.kind === "radar" && k === fr.li ? 0.8 : 0));
+    $("slider").value = String(idx);
+    $("frameTime").textContent = hhmm.format(new Date(fr.time * 1000));
+    $("frameAgo").textContent = isFc
+      ? "תחזית · " + inText(fr.time)
+      : agoText(fr.time) + (idx === nowIdx ? " · התמונה הכי חדשה" : "");
+    $("fcBadge").hidden = !isFc;
+    updateIcons(fr.time, isFc);
+  }
+
+  function stop() {
+    playing = false;
+    clearTimeout(timer);
+    $("playBtn").textContent = "▶ הפעל";
+  }
+  function delayAfter(i) {
+    if (i === timeline.length - 1) return 2000;
+    if (i === nowIdx) return 1500;
+    return timeline[i].kind === "fc" ? 1000 : 600;
+  }
+  function step() {
+    if (!playing) return;
+    show(idx === timeline.length - 1 ? 0 : idx + 1);
+    timer = setTimeout(step, delayAfter(idx));
+  }
+  function play() {
+    if (timeline.length < 2) return;
+    playing = true;
+    $("playBtn").textContent = "⏸ עצור";
+    if (idx === timeline.length - 1) show(0);
+    timer = setTimeout(step, delayAfter(idx));
+  }
+
+  $("playBtn").addEventListener("click", () => (playing ? stop() : play()));
+  $("slider").addEventListener("input", (e) => { stop(); show(Number(e.target.value)); });
+  $("homeBtn").addEventListener("click", homeView);
+  $("baseBtn").addEventListener("click", () => { if (map) useBasemap(baseIdx + 1); });
+
+  async function loadRadar() {
+    const note = $("radarNote");
+    try {
+      const r = await fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      const past = (j.radar && j.radar.past) || [];
+      if (!past.length) throw new Error("no frames");
+      const newest = past[past.length - 1];
+      if (!frames.length || frames[frames.length - 1].path !== newest.path) {
+        host = j.host;
+        frames = past;
+        buildRadarLayers();
+      }
+      note.hidden = true;
+      status.radar = true;
+    } catch (e) {
+      status.radar = false;
+      note.hidden = false;
+      note.className = "notice err";
+      note.textContent = "לא הצלחנו להביא את תמונות המכ״ם עכשיו. בדקו שיש אינטרנט. ננסה שוב לבד בעוד כמה דקות.";
+    }
+    setLive();
+    rebuildTimeline();
+  }
+
+  /* ---------- Refresh: every 5 minutes, when the app comes back to the screen, and on the ↻ button ---------- */
+  let lastRefresh = 0;
+  let refreshing = null;
+  function refreshAll() {
+    if (refreshing) return refreshing;
+    $("refreshBtn").classList.add("spin");
+    refreshing = Promise.all([loadWeather(), loadRadar()]).finally(() => {
+      lastRefresh = Date.now();
+      refreshing = null;
+      $("refreshBtn").classList.remove("spin");
+    });
+    return refreshing;
+  }
+  $("refreshBtn").addEventListener("click", () => refreshAll());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (Date.now() - lastRefresh > 2 * 60 * 1000) refreshAll();
+    } else {
+      stop();
+    }
+  });
+  setInterval(() => { if (document.visibilityState === "visible") refreshAll(); }, REFRESH_MS);
+  setInterval(() => { if (!playing && timeline.length) show(idx); }, 60 * 1000);
+
+  /* ---------- Tabs ---------- */
+  const VIEWS = ["now", "map", "dict"];
+  let current = null;
+  function openView(name) {
+    if (!VIEWS.includes(name)) name = "now";
+    if (name === current) return;
+    current = name;
+    VIEWS.forEach((v) => { $("view-" + v).hidden = v !== name; });
+    document.querySelectorAll(".tabbar a").forEach((a) => {
+      if (a.dataset.view === name) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
+    window.scrollTo(0, 0);
+    store.set("radar-tab", name);
+    if (name === "map") {
+      ensureMap();
+      if (!reduceMotion && !playing) play();
+    } else {
+      stop();
+    }
+  }
+  document.querySelectorAll(".tabbar a").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      openView(a.dataset.view);
+      history.replaceState(null, "", "#" + a.dataset.view);
+    });
+  });
+  openView(location.hash.slice(1) || store.get("radar-tab") || "now");
+
+  /* ---------- Install as an app ---------- */
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let installEvent = null;
+  if (!standalone && store.get("radar-tip-closed") !== "1") $("installTip").hidden = false;
+  $("tipClose").addEventListener("click", () => {
+    $("installTip").hidden = true;
+    store.set("radar-tip-closed", "1");
+  });
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvent = e;
+    $("installBtn").hidden = false;
+  });
+  $("installBtn").addEventListener("click", async () => {
+    if (!installEvent) return;
+    installEvent.prompt();
+    try { await installEvent.userChoice; } catch (e) { /* ignore */ }
+    installEvent = null;
+    $("installBtn").hidden = true;
+  });
+  window.addEventListener("appinstalled", () => {
+    $("installBtn").hidden = true;
+    $("installTip").hidden = true;
+  });
+  if ("serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("sw.js").catch(() => { /* the app still works without it */ });
+  }
+
+  refreshAll();
+})();
+</script>
+</body>
+</html>
